@@ -9,3 +9,4 @@ scikit-learn
 xgboost
 tensorflow
 ta
+streamlit-option-menu
