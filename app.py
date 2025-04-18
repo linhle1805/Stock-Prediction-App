@@ -31,21 +31,22 @@ with st.sidebar:
         icons=["house", "eye"],
         menu_icon="cast",
         default_index=0
-    )   
-    
-symbol = st.sidebar.text_input("Nhập mã cổ phiếu:", "VIC")
-start_date = st.sidebar.date_input("Chọn ngày bắt đầu:", datetime(2007, 9, 19))
+    )
+
+symbol = st.sidebar.text_input("Nhập mã cổ phiếu:", value=st.session_state.get("selected_symbol", "VIC"))
+start_date = st.sidebar.date_input("Chọn ngày bắt đầu:", value=st.session_state.get("start_date", datetime(2007, 9, 19)))
 st.session_state["selected_symbol"] = symbol.upper()
 st.session_state["start_date"] = start_date
 start_date_str = start_date.strftime("%d/%m/%Y")
 end_date_str = datetime.today().strftime("%d/%m/%Y")
 
+@st.cache_data
 def fetch_stock_data(symbol="VIC", start_date="19/09/2007", end_date="", output_file="VIC_stock_data.csv"):
     url = "https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/PriceHistory.ashx"
     params = {
-        "Symbol": symbol,
+        "Symbol": symbol.upper(),
         "StartDate": start_date,
-        "EndDate": end_date,
+        "EndDate": end_date if end_date else datetime.today().strftime("%d/%m/%Y"),
         "PageIndex": 1,
         "PageSize": 10000
     }
@@ -62,7 +63,13 @@ def fetch_stock_data(symbol="VIC", start_date="19/09/2007", end_date="", output_
             df = pd.DataFrame(data["Data"]["Data"])
             df["Ngay"] = pd.to_datetime(df["Ngay"], format="%d/%m/%Y")
             df.set_index("Ngay", inplace=True)
+            # Lọc dữ liệu theo start_date
+            start_date_dt = pd.to_datetime(start_date, format="%d/%m/%Y")
+            df = df[df.index >= start_date_dt]
             return df
+        else:
+            st.error("Không có dữ liệu từ API cho mã cổ phiếu hoặc khoảng thời gian đã chọn.")
+            return pd.DataFrame()
     except requests.exceptions.RequestException as e:
         st.error(f"Lỗi khi tải dữ liệu: {e}")
         return pd.DataFrame()
@@ -74,18 +81,15 @@ def clean_numeric(value):
         return np.nan
 
 def preprocess_stock_data(df):
+    if df.empty:
+        return df
     columns_to_drop = ["GiaTriKhopLenh", "KLThoaThuan", "GtThoaThuan", "ThayDoi"]
     df = df.drop(columns=columns_to_drop, errors="ignore")
-    df = df.applymap(clean_numeric)
+    for col in df.columns:
+        df[col] = df[col].apply(clean_numeric)
     df.dropna(inplace=True)
-    if 'Ngay' in df.columns:
-        df['Ngay'] = pd.to_datetime(df['Ngay'], errors="coerce")
-        df.dropna(subset=['Ngay'], inplace=True)
-        df.set_index('Ngay', inplace=True)
     return df
 
-symbol = st.session_state.get("selected_symbol", "VIC")
-start_date = st.session_state.get("start_date", datetime(2007, 9, 19))
 data = fetch_stock_data(symbol, start_date_str, end_date_str)
 data_cleaned = preprocess_stock_data(data)
 
