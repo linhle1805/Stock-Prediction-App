@@ -284,7 +284,12 @@ elif selected == "Forecasting":
                 future_preds_scaled = model.predict(last_data)[0]
                 future_preds = scaler_y.inverse_transform(future_preds_scaled.reshape(-1, 1)).flatten()
 
-            future_dates = [data_cleaned.index[-1] + timedelta(days=i) for i in range(1, future_days + 1)]
+            future_dates = []
+            current_date = data_cleaned.index[-1]
+            while len(future_dates) < future_days:
+                current_date += timedelta(days=1)
+                if current_date.weekday() < 5: 
+                    future_dates.append(current_date)
 
             if model_option in ["Random Forest", "XGBoost"]:
                 X_test, y_test = X_test_raw, y_test_raw
