@@ -44,9 +44,9 @@ end_date_str = datetime.today().strftime("%d/%m/%Y")
 def fetch_stock_data(symbol="VIC", start_date="19/09/2007", end_date="", output_file="VIC_stock_data.csv"):
     url = "https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/PriceHistory.ashx"
     params = {
-        "Symbol": symbol.upper(),
+        "Symbol": symbol,
         "StartDate": start_date,
-        "EndDate": end_date if end_date else datetime.today().strftime("%d/%m/%Y"),
+        "EndDate": end_date,
         "PageIndex": 1,
         "PageSize": 10000
     }
@@ -63,13 +63,7 @@ def fetch_stock_data(symbol="VIC", start_date="19/09/2007", end_date="", output_
             df = pd.DataFrame(data["Data"]["Data"])
             df["Ngay"] = pd.to_datetime(df["Ngay"], format="%d/%m/%Y")
             df.set_index("Ngay", inplace=True)
-            # Lọc dữ liệu theo start_date
-            start_date_dt = pd.to_datetime(start_date, format="%d/%m/%Y")
-            df = df[df.index >= start_date_dt]
             return df
-        else:
-            st.error("Không có dữ liệu từ API cho mã cổ phiếu hoặc khoảng thời gian đã chọn.")
-            return pd.DataFrame()
     except requests.exceptions.RequestException as e:
         st.error(f"Lỗi khi tải dữ liệu: {e}")
         return pd.DataFrame()
