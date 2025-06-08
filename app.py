@@ -75,17 +75,30 @@ def clean_numeric(value):
         return np.nan
 
 def preprocess_stock_data(df):
-    if df.empty:
-        return df
     columns_to_drop = ["GiaTriKhopLenh", "KLThoaThuan", "GtThoaThuan", "ThayDoi"]
     df = df.drop(columns=columns_to_drop, errors="ignore")
-    for col in df.columns:
-        df[col] = df[col].apply(clean_numeric)
+    df = df.applymap(clean_numeric)
     df.dropna(inplace=True)
+    if 'Ngay' in df.columns:
+        df['Ngay'] = pd.to_datetime(df['Ngay'], errors="coerce")
+        df.dropna(subset=['Ngay'], inplace=True)
+        df.set_index('Ngay', inplace=True)
     return df
 
 data = fetch_stock_data(symbol, start_date_str, end_date_str)
 data_cleaned = preprocess_stock_data(data)
+
+def get_current_price(df, target_column="GiaDongCua"):
+    if df.empty or target_column not in df.columns:
+        st.error("Không có dữ liệu hoặc cột GiaDongCua không tồn tại!")
+        return None
+    df = df.sort_index()
+    valid_prices = df[target_column][(df[target_column].notna()) & (df[target_column] != 0)]
+    if not valid_prices.empty:
+        return valid_prices.iloc[-1]
+    else:
+        st.error("Không tìm thấy giá đóng cửa hợp lệ trong dữ liệu!")
+        return None
 
 # Dashboard
 if selected == "Dashboard":
@@ -99,7 +112,6 @@ if selected == "Dashboard":
         data_cleaned = preprocess_stock_data(data)
         st.data_editor(data)
         
-        # 
         # Hiển thị chỉ số
         st.subheader("**Chỉ số quan trọng**")
         gia_dong_cua_tb = data["GiaDongCua"].mean()
@@ -308,11 +320,19 @@ elif selected == "Forecasting":
             
             # Cột 1: Giá hiện tại & Biến động
             with col1:
-                current_price = data_cleaned[TARGET].iloc[-1]
-                st.metric("Giá hiện tại", f"{current_price:.2f}")
-                percent_change = (data_cleaned[TARGET].iloc[-1] - data_cleaned[TARGET].iloc[-2]) / data_cleaned[TARGET].iloc[-2] * 100
-                st.metric("Biến động lịch sử", f"{percent_change:.1f}%")
-            
+                current_price = get_current_price(data)
+                if current_price is not None:
+                    st.metric("Giá hiện tại", f"{current_price:.2f}")
+                    valid_prices = data["GiaDongCua"][(data["GiaDongCua"].notna()) & (data["GiaDongCua"] != 0)]
+                    if len(valid_prices) >= 2:
+                        percent_change = (current_price - valid_prices.iloc[-2]) / valid_prices.iloc[-2] * 100
+                        st.metric("Biến động lịch sử", f"{percent_change:.1f}%")
+                    else:
+                        st.metric("Biến động lịch sử", "N/A")
+                else:
+                    st.metric("Giá hiện tại", "N/A")
+                    st.metric("Biến động lịch sử", "N/A")
+               
             # Cột 2: Dự đoán ngày tiếp theo & RSI
             with col2:
                 st.metric("Dự đoán ngày tiếp theo", f"{future_preds[0]:.2f}", f"{((future_preds[0] - current_price) / current_price) * 100:.2f}%")
